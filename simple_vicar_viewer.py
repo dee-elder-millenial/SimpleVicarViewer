@@ -125,7 +125,7 @@ class SimpleVicarViewer(tk.Tk):
     def open_file(self) -> None:
         filename = filedialog.askopenfilename(
             title="Open VICAR image",
-            filetypes=(("VICAR images", "*.img *.IMG *.vicar *.VICAR"), ("All files", "*.*")),
+            filetypes=(("VICAR images", "*.img *.IMG *.vic *.VIC *.vicar *.VICAR"), ("All files", "*.*")),
         )
         if filename:
             self.load_file(Path(filename))
