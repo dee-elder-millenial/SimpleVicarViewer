@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# Local files
+*.log
+.DS_Store
+Thumbs.db
+
+# Large sample data should not be committed by accident
+*.IMG
+*.img
+*.VICAR
+*.vicar
