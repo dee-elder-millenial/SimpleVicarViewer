@@ -9,6 +9,7 @@ This is meant to be simple on purpose: open a `.IMG`, `.VIC`, `.VICAR`, or other
 - Opens local VICAR image files using `vicar.VicarImage`
 - Displays 2-D images directly
 - Handles multi-band / 3-D data by showing one band at a time
+- Previous / next controls for moving through loadable VICAR files in the same folder
 - Contrast controls using percentile stretch
 - Grayscale and common matplotlib colormaps
 - Shows basic image metadata and the raw VICAR label
@@ -39,6 +40,13 @@ Or open a file directly:
 ```bash
 python simple_vicar_viewer.py path/to/image.img
 ```
+
+## Controls
+
+- `Open VICAR…`: choose a VICAR image file
+- `Previous` / `Next`: load the previous or next loadable `.img`, `.vic`, or `.vicar` file in the same folder
+- Left arrow / Right arrow: same as previous / next
+- `Save PNG…`: save the currently displayed view
 
 ## Notes
 
