@@ -33,6 +33,8 @@ except ImportError as exc:  # pragma: no cover - handled at runtime for users
 
 
 DEFAULT_CMAPS = ("gray", "viridis", "plasma", "inferno", "magma", "cividis")
+VICAR_EXTENSIONS = {".img", ".vic", ".vicar"}
+VICAR_FILE_FILTER = "*.img *.IMG *.vic *.VIC *.vicar *.VICAR"
 
 
 class SimpleVicarViewer(tk.Tk):
@@ -59,6 +61,8 @@ class SimpleVicarViewer(tk.Tk):
         self.metadata_text = tk.StringVar(value="No image loaded.")
 
         self._build_ui()
+        self.bind("<Left>", lambda _event: self.load_adjacent_file(-1))
+        self.bind("<Right>", lambda _event: self.load_adjacent_file(1))
 
         if initial_file:
             self.load_file(Path(initial_file))
@@ -69,23 +73,25 @@ class SimpleVicarViewer(tk.Tk):
 
         toolbar = ttk.Frame(self, padding=(8, 6))
         toolbar.grid(row=0, column=0, sticky="ew")
-        toolbar.columnconfigure(8, weight=1)
+        toolbar.columnconfigure(10, weight=1)
 
         ttk.Button(toolbar, text="Open VICAR…", command=self.open_file).grid(row=0, column=0, padx=(0, 8))
-        ttk.Button(toolbar, text="Save PNG…", command=self.save_png).grid(row=0, column=1, padx=(0, 16))
+        ttk.Button(toolbar, text="◀ Previous", command=lambda: self.load_adjacent_file(-1)).grid(row=0, column=1, padx=(0, 4))
+        ttk.Button(toolbar, text="Next ▶", command=lambda: self.load_adjacent_file(1)).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(toolbar, text="Save PNG…", command=self.save_png).grid(row=0, column=3, padx=(0, 16))
 
-        ttk.Label(toolbar, text="Low %").grid(row=0, column=2)
-        ttk.Spinbox(toolbar, from_=0, to=49, increment=0.5, textvariable=self.low_percentile, width=6, command=self.refresh_image).grid(row=0, column=3, padx=(4, 10))
+        ttk.Label(toolbar, text="Low %").grid(row=0, column=4)
+        ttk.Spinbox(toolbar, from_=0, to=49, increment=0.5, textvariable=self.low_percentile, width=6, command=self.refresh_image).grid(row=0, column=5, padx=(4, 10))
 
-        ttk.Label(toolbar, text="High %").grid(row=0, column=4)
-        ttk.Spinbox(toolbar, from_=51, to=100, increment=0.5, textvariable=self.high_percentile, width=6, command=self.refresh_image).grid(row=0, column=5, padx=(4, 10))
+        ttk.Label(toolbar, text="High %").grid(row=0, column=6)
+        ttk.Spinbox(toolbar, from_=51, to=100, increment=0.5, textvariable=self.high_percentile, width=6, command=self.refresh_image).grid(row=0, column=7, padx=(4, 10))
 
-        ttk.Label(toolbar, text="Colormap").grid(row=0, column=6)
+        ttk.Label(toolbar, text="Colormap").grid(row=0, column=8)
         cmap_box = ttk.Combobox(toolbar, textvariable=self.colormap_name, values=DEFAULT_CMAPS, width=10, state="readonly")
-        cmap_box.grid(row=0, column=7, padx=(4, 10))
+        cmap_box.grid(row=0, column=9, padx=(4, 10))
         cmap_box.bind("<<ComboboxSelected>>", lambda _event: self.refresh_image())
 
-        ttk.Button(toolbar, text="Reset stretch", command=self.reset_stretch).grid(row=0, column=9)
+        ttk.Button(toolbar, text="Reset stretch", command=self.reset_stretch).grid(row=0, column=11)
 
         body = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         body.grid(row=1, column=0, sticky="nsew")
@@ -120,23 +126,25 @@ class SimpleVicarViewer(tk.Tk):
         ttk.Label(bottom, text="Band").grid(row=0, column=0, padx=(0, 4))
         self.band_spin = ttk.Spinbox(bottom, from_=0, to=0, textvariable=self.band_index, width=6, command=self.refresh_image, state="disabled")
         self.band_spin.grid(row=0, column=1, padx=(0, 16))
-        ttk.Label(bottom, textvariable=self.status_text).grid(row=0, column=2, sticky="w")
+        ttk.Label(bottom, text="Left/Right arrows: previous/next loadable file").grid(row=0, column=2, padx=(0, 16), sticky="w")
+        ttk.Label(bottom, textvariable=self.status_text).grid(row=0, column=3, sticky="w")
 
     def open_file(self) -> None:
         filename = filedialog.askopenfilename(
             title="Open VICAR image",
-            filetypes=(("VICAR images", "*.img *.IMG *.vic *.VIC *.vicar *.VICAR"), ("All files", "*.*")),
+            filetypes=(("VICAR images", VICAR_FILE_FILTER), ("All files", "*.*")),
         )
         if filename:
             self.load_file(Path(filename))
 
-    def load_file(self, path: Path) -> None:
+    def load_file(self, path: Path, *, show_error: bool = True) -> bool:
         try:
             vic = vicar.VicarImage(str(path))
             data = self._extract_array(vic)
         except Exception as exc:  # noqa: BLE001 - user-facing GUI error
-            messagebox.showerror("Could not open VICAR image", f"{path}\n\n{exc}")
-            return
+            if show_error:
+                messagebox.showerror("Could not open VICAR image", f"{path}\n\n{exc}")
+            return False
 
         self.current_path = path
         self.vicar_image = vic
@@ -153,6 +161,53 @@ class SimpleVicarViewer(tk.Tk):
         self._update_metadata()
         self._update_label_box()
         self.refresh_image()
+        return True
+
+    def load_adjacent_file(self, direction: int) -> None:
+        """Load the previous or next readable VICAR-ish file in the current folder."""
+        if self.current_path is None:
+            self.status_text.set("Open a VICAR file first, then use Left/Right arrows.")
+            return
+
+        files = self._vicar_files_in_current_folder()
+        if len(files) <= 1:
+            self.status_text.set("No other VICAR-looking files found in this folder.")
+            return
+
+        try:
+            current_index = files.index(self.current_path)
+        except ValueError:
+            current_index = self._nearest_file_index(files, self.current_path)
+
+        step = 1 if direction >= 0 else -1
+        skipped: list[str] = []
+        for offset in range(1, len(files) + 1):
+            candidate = files[(current_index + (step * offset)) % len(files)]
+            if candidate == self.current_path:
+                continue
+            if self.load_file(candidate, show_error=False):
+                if skipped:
+                    self.status_text.set(f"Showing {candidate.name}; skipped {len(skipped)} unloadable file(s).")
+                return
+            skipped.append(candidate.name)
+
+        self.status_text.set("No other loadable VICAR files found in this folder.")
+
+    def _vicar_files_in_current_folder(self) -> list[Path]:
+        if self.current_path is None:
+            return []
+        folder = self.current_path.parent
+        return sorted(
+            [path for path in folder.iterdir() if path.is_file() and path.suffix.lower() in VICAR_EXTENSIONS],
+            key=lambda path: path.name.lower(),
+        )
+
+    def _nearest_file_index(self, files: list[Path], target: Path) -> int:
+        target_name = target.name.lower()
+        for index, path in enumerate(files):
+            if path.name.lower() > target_name:
+                return index
+        return 0
 
     def _extract_array(self, vic: Any) -> np.ndarray:
         """Return the most useful numpy array exposed by rms-vicar."""
