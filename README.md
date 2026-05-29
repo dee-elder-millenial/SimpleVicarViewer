@@ -2,7 +2,7 @@
 
 A very small Python desktop viewer for JPL VICAR image files, built around the [`rms-vicar`](https://github.com/SETI/rms-vicar) package.
 
-This is meant to be simple on purpose: open a `.IMG`, `.VICAR`, or other VICAR-format file, display the image, and show the VICAR label text.
+This is meant to be simple on purpose: open a `.IMG`, `.VIC`, `.VICAR`, or other VICAR-format file, display the image, and show the VICAR label text.
 
 ## Features
 
